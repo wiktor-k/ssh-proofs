@@ -1,15 +1,33 @@
 <!doctype html>
-<html>
+<html lang=en>
 <head>
-<title>Identity proof</title>
+  <meta charset=utf-8>
+  <title>Identity proof</title>
+  <style>
+    a[rel]::before { padding-right: .2rem; }
+    .keys { font-family: monospace; font-size: small; }
+    .key.verified::before { content: "✅"; margin-right: .2rem; }
+    .key:not(.verified) { color: gray; }
+    .identities li:has(.verified) a::after {content: "(✅ verified)"; color: green; margin-left: .2rem; font-size: small; vertical-align: top; }
+  </style>
+  <link rel=stylesheet href=https://metacode.biz/fonts.css>
+  <link rel=stylesheet href=https://metacode.biz/theme.css>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css" integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
 </head>
 <body>
-<h1>Identity proofs</h1>
-<input id=handles value="github.com/wiktor-k;gitlab.com/wiktor">
-<input type=submit id=check>
-<script>
-document.getElementById('check').addEventListener('click', function() {
-  const identities = document.getElementById('handles').value.split(';');
+  <header><nav></nav></header>
+  <main><section>
+<h1>SSH identity proofs for everyone!</h1>
+<ul class="identities">
+  <li><a href="https://github.com/wiktor-k" rel="me">wiktor-k</a>
+    <details><summary>SSH keys found for this identity</summary><ul class="keys"></ul></details>
+  </li>
+  <li><a href="https://gitlab.com/wiktor" rel="me">wiktor</a>
+    <details><summary>SSH keys found for this identity</summary><ul class="keys"></ul></details>
+  </li>
+</ul>
+<script type=module>
+  let commonKeys;
 
   const domainDefaultProviders = {
     'github.com': 'gh',
@@ -18,32 +36,84 @@ document.getElementById('check').addEventListener('click', function() {
 
   const providers = {
     'gh': {
-      re: 'github\.com\/(?<username>[a-zA-Z0-9_-]+)',
+        re: 'https:\/\/github\.com\/(?<username>[a-zA-Z0-9_-]+)',
+        source: 'https://api.github.com/users/{username}/ssh_signing_keys',
+        path: ['key'],
+        icon: 'github'
     },
     'gl': {
-      re: '(?<host>[a-z0-9.-]+)\/(?<username>[a-zA-Z0-9_-]+)',
+        re: 'https:\/\/(?<host>[a-z0-9.-]+)\/(?<username>[a-zA-Z0-9_-]+)',
+        source: 'https://{host}/api/v4/users/{username}/keys',
+        path: ['key'],
+        icon: 'gitlab'
     },
   };
-  
-  console.log(identities
-  .map(id => {
-    let provider;
-    if (id.indexOf(':') > -1) {
-      provider = id.substring(0, id.indexOf(':'));
-      id = id.substring(id.indexOf(':') + 1);
-    } else {
-      const domain = id.substring(0, id.indexOf('/'));
-      provider = providers[domainDefaultProviders[domain]];
-    }
 
-    const re = new RegExp(provider.re);
+  async function fetchKeys(element, data) {
+      const resp = await fetch(data.source, {
+          headers: {
+              Accept: 'application/json'
+          }});
+      if (!resp.ok) {
+          throw new Error('Response failed: ' + resp);
+      }
+      let json = await resp.json();
+      if (!Array.isArray(json)) {
+          throw new Error('Expected array but got: ' + json);
+      }
+      // visit jsonpath
+      data.path.forEach(segment => json = json.map(element => element[segment]));
 
-    return { provider
-    , id, matches: re.exec(id).groups };
-  })
+      const keys = new Set();
+      const keysEl = element.parentNode.querySelector('.keys');
+      json.map(key => {
+          if (typeof key == "string") {
+              const keyEl = document.createElement('li');
+              keyEl.className = "key";
+              keyEl.dataset.key = key.split(' ')[1];
+              keyEl.textContent = key.split(' ').slice(0, 2).join(' ');
+              keysEl.appendChild(keyEl);
+              return key.split(' ')[1];
+          }
+      }).filter(key => !!key).forEach(key => keys.add(key));
+      appendKeys(keys);
+  }
 
-  )
+  function appendKeys(keys) {
+      if (commonKeys) {
+          commonKeys = new Set([...commonKeys].filter(i => keys.has(i)))
+      } else {
+          commonKeys = keys;
+      }
+      Array.prototype.forEach.call(document.querySelectorAll('.key'), key => key.classList.toggle('verified', commonKeys.has(key.dataset.key)));
+  }
+
+window.addEventListener('DOMContentLoaded', function() {
+    const identities = Array.from(document.querySelectorAll('[rel=me]'));
+
+    for (let identity of identities) {
+        let id = identity.href;
+        let provider = providers[domainDefaultProviders[new URL(id).host]];
+        if (provider) {
+            const re = new RegExp(provider.re);
+            const matches = re.exec(id).groups;
+            identity.classList.add('fab');
+            identity.classList.add('fa-' + provider.icon);
+            identity.textContent = matches['username'];
+
+            fetchKeys(identity, { provider
+             ,
+             id,
+             matches,
+             path: provider.path,
+             source: provider.source.replace(/\{([a-z]+)\}/g, (_, id) => encodeURIComponent(matches[id]))
+                             });
+        }
+  }
 
 });
 </script>
+</section>
+  </main>
+  <footer></footer>
 </body>
