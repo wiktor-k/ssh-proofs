@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<title>Identity proof</title>
+</head>
+<body>
+<h1>Identity proofs</h1>
+<input id=handles value="github.com/wiktor-k;gitlab.com/wiktor">
+<input type=submit id=check>
+<script>
+document.getElementById('check').addEventListener('click', function() {
+  const identities = document.getElementById('handles').value.split(';');
+
+  const domainDefaultProviders = {
+    'github.com': 'gh',
+    'gitlab.com': 'gl',
+  };
+
+  const providers = {
+    'gh': {
+      re: 'github\.com\/(?<username>[a-zA-Z0-9_-]+)',
+    },
+    'gl': {
+      re: '(?<host>[a-z0-9.-]+)\/(?<username>[a-zA-Z0-9_-]+)',
+    },
+  };
+  
+  console.log(identities
+  .map(id => {
+    let provider;
+    if (id.indexOf(':') > -1) {
+      provider = id.substring(0, id.indexOf(':'));
+      id = id.substring(id.indexOf(':') + 1);
+    } else {
+      const domain = id.substring(0, id.indexOf('/'));
+      provider = providers[domainDefaultProviders[domain]];
+    }
+
+    const re = new RegExp(provider.re);
+
+    return { provider
+    , id, matches: re.exec(id).groups };
+  })
+
+  )
+
+});
+</script>
+</body>
